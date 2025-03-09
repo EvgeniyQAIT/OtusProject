@@ -1,9 +1,12 @@
 import time
+
+import allure
 import pytest
 import requests
 
 base_url = 'https://reqres.in/api'
 
+@allure.title("Проверка позитивная/негативная для регистрации пользователя")
 @pytest.mark.parametrize(
     "endpoint, payload, expected_status, expected_response",
     [
@@ -17,6 +20,7 @@ def test_api_register_user(endpoint, payload, expected_status, expected_response
     assert response.status_code == expected_status
     assert expected_response(response.json())
 
+@allure.title("Проверка позитивная/негативная для авторизации пользователя")
 @pytest.mark.parametrize(
     "endpoint, payload, expected_status, expected_response",
     [
@@ -30,6 +34,7 @@ def test_api_login_user(endpoint, payload, expected_status, expected_response):
     assert response.status_code == expected_status
     assert expected_response(response.json())
 
+@allure.title("Проверка позитивная/негативная для получения пользовательских данных")
 @pytest.mark.parametrize(
     "endpoint, expected_status, expected_response",
     [
@@ -43,6 +48,7 @@ def test_api_get_user(endpoint, expected_status, expected_response):
     assert response.status_code == expected_status
     assert expected_response(response.json())
 
+@allure.title("Проверка позитивная/негативная обновления пользовательских данных")
 @pytest.mark.parametrize(
     "endpoint, method, payload, expected_status, expected_response",
     [
@@ -60,6 +66,7 @@ def test_api_update_user(endpoint, method, payload, expected_status, expected_re
     assert response.status_code == expected_status
     assert expected_response(response.json())
 
+@allure.title("Проверка позитивная/негативная для получения списка пользователей")
 @pytest.mark.parametrize(
     "endpoint, expected_status, expected_response",
     [
@@ -78,6 +85,7 @@ def test_api_get_users(endpoint, expected_status, expected_response):
     if "delay" in url:
         assert (end_time - start_time) >= 3
 
+@allure.title("Проверка позитивная/негативная для получения информации неизвестного ресурса и его обновление")
 @pytest.mark.parametrize(
     "endpoint, payload, expected_status, expected_response",
     [
@@ -97,28 +105,22 @@ def test_api_unknown_resource(endpoint, payload, expected_status, expected_respo
     if response.content:
         assert expected_response(response.json())
 
+@allure.title("Проверка выхода пользователя из системы")
 def test_api_logout_user():
-    """
-    Тест на выход пользователя из системы
-    """
     register_endpoint = f"{base_url}/logout"
     response = requests.post(register_endpoint)
     assert response.status_code == 200
     assert response.json() == {}
 
+@allure.title("Проверка удаление пользователя")
 def test_api_delete_user():
-    """
-    Тест на удаление пользователя
-    """
     register_endpoint = f"{base_url}/users/2"
     response = requests.delete(register_endpoint)
     assert response.status_code == 204
     assert response.text == ""
 
+@allure.title("Проверка создания нового пользователя")
 def test_api_new_user():
-    """
-    Тест на создание нового пользователя
-    """
     register_endpoint = f"{base_url}/users"
     payload = {
         "name": "morpheus",
@@ -134,19 +136,15 @@ def test_api_new_user():
     assert user_data["name"] == "morpheus"
     assert user_data["job"] == "leader"
 
+@allure.title("Проверка на удаление информации о неизвестном ресурсе с ID 2")
 def test_api_delete_unknown_resource():
-    """
-    Тест на удаление информации о неизвестном ресурсе с ID 2
-    """
     register_endpoint = f"{base_url}/unknown/2"
     response = requests.delete(register_endpoint)
     assert response.status_code == 204
     assert response.text == ""
 
+@allure.title("Проверка на получение информации о всех неизвестных ресурсах")
 def test_api_all_unknown_resources():
-    """
-    Тест на получение информации о всех неизвестных ресурсах
-    """
     register_endpoint = f"{base_url}/unknown"
     response = requests.get(register_endpoint)
     assert response.status_code == 200
