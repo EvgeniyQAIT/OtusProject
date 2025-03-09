@@ -96,7 +96,7 @@ def browser(request):
     video = request.config.getoption("--video")
     mobile = request.config.getoption("--mobile")
 
-    # Если переданн executor, но без конкретного адреса, то по умолчанию ставим "127.0.0.1"
+    # Если переданн executor, ноо без конкретного адреса, то по умолчанию ставим "127.0.0.1"
     if executor is None:
         executor_url = None  # Локальный режим
     else:
