@@ -10,8 +10,6 @@ from selenium.webdriver.firefox.options import Options as FFOptions
 from selenium.webdriver.edge.options import Options as EdgeOptions
 from page_objects.registr_user_page import RegistrationPage
 
-
-
 def pytest_addoption(parser):
     parser.addoption("--browser", default="chrome", help="Browser for tests")
     parser.addoption(
@@ -40,7 +38,6 @@ def pytest_addoption(parser):
     parser.addoption("--video", action="store_true", help="Record video during tests")
     parser.addoption("--bv", help="Browser version")
 
-
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
@@ -49,7 +46,6 @@ def pytest_runtest_makereport(item, call):
         item.status = "failed"
     else:
         item.status = "passed"
-
 
 @pytest.fixture()
 def browser(request):
@@ -64,12 +60,11 @@ def browser(request):
     video = request.config.getoption("--video")
     mobile = request.config.getoption("--mobile")
 
-    # Если передан executor, но без конкретного адреса, то по умолчанию ставим "127.0.0.1"
+    # Убедитесь, что executor указан
     if executor is None:
-        executor_url = None  # Локальный режим
-    else:
-        # Если executor передан, формируем URL для удаленного сервера
-        executor_url = f"http://{executor}:4444/wd/hub"
+        raise ValueError("Executor address must be specified for remote execution.")
+
+    executor_url = f"http://{executor}:4444/wd/hub"
 
     log_dir = os.path.join(os.path.dirname(__file__), "logs")
 
@@ -91,22 +86,16 @@ def browser(request):
         options = ChromeOptions()
         if headless:
             options.add_argument("headless=new")
-        if not executor:
-            driver = webdriver.Chrome(options=options)
     elif browser_name in ["ff", "firefox"]:
         browser_name = "firefox"
         options = FFOptions()
         if headless:
             options.add_argument("--headless")
-        if not executor:
-            driver = webdriver.Firefox(options=options)
     elif browser_name in ["edge", "Edge", "MicrosoftEdge"]:
         browser_name = "MicrosoftEdge"
         options = EdgeOptions()
         if headless:
             options.add_argument("headless=new")
-        if not executor:
-            driver = webdriver.Edge(options=options)
 
     caps = {
         "browserName": browser_name,
@@ -123,11 +112,10 @@ def browser(request):
         "acceptInsecureCerts": True,
     }
 
-    if executor:
-        for k, v in caps.items():
-            options.set_capability(k, v)
+    for k, v in caps.items():
+        options.set_capability(k, v)
 
-        driver = webdriver.Remote(command_executor=executor_url, options=options)
+    driver = webdriver.Remote(command_executor=executor_url, options=options)
 
     allure.attach(
         name=driver.session_id,
@@ -139,7 +127,7 @@ def browser(request):
     driver.logger = logger
     driver.test_name = request.node.name
 
-    logger.info("Browser %s started" % browser)
+    logger.info("Browser %s started" % browser_name)
 
     if not mobile:
         driver.maximize_window()
