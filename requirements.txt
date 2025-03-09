@@ -5,3 +5,4 @@ allure-pytest==2.13.5
 allure-python-commons~=2.13.5
 pytest-xdist==3.6.1
 faker==37.0.0
+requests==2.31.0
