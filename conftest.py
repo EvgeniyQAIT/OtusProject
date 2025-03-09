@@ -10,8 +10,6 @@ from selenium.webdriver.firefox.options import Options as FFOptions
 from selenium.webdriver.edge.options import Options as EdgeOptions
 from page_objects.registr_user_page import RegistrationPage
 
-
-
 def pytest_addoption(parser):
     parser.addoption("--browser", default="chrome", help="Browser for tests")
     parser.addoption(
@@ -39,7 +37,7 @@ def pytest_addoption(parser):
     parser.addoption("--logs", action="store_true", help="Enable logging of tests")
     parser.addoption("--video", action="store_true", help="Record video during tests")
     parser.addoption("--bv", help="Browser version")
-
+    parser.addoption("--no-sandbox")
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
@@ -50,6 +48,40 @@ def pytest_runtest_makereport(item, call):
     else:
         item.status = "passed"
 
+    if rep.when == "call" and rep.outcome == "failed":
+        try:
+            if "browser" in item.funcargs:
+                driver = item.funcargs["browser"]
+
+                screenshots_dir = os.path.join(os.path.dirname(__file__), "screenshots")
+                os.makedirs(screenshots_dir, exist_ok=True)
+
+                current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+                date_dir = os.path.join(screenshots_dir, current_date)
+                os.makedirs(date_dir, exist_ok=True)
+
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                screenshot_path = os.path.join(
+                    date_dir, f"{item.name}_{timestamp}_{item.status}.png"
+                )
+
+                driver.save_screenshot(screenshot_path)
+
+                logger = driver.logger
+                logger.info(f"Скриншот сохранен: {screenshot_path}")
+            else:
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Тест {item.name} не использует браузер, скриншот не создан."
+                )
+        except Exception as e:
+            driver = item.funcargs["browser"]
+            logger = driver.logger
+            logger.info(f"Не удалось создать скриншот: {e}")
+
+    # Создаем папку для результатов отчетов
+    allure_results_dir = os.path.join(os.path.dirname(__file__), "allure-results")
+    os.makedirs(allure_results_dir, exist_ok=True)
 
 @pytest.fixture()
 def browser(request):
@@ -64,7 +96,7 @@ def browser(request):
     video = request.config.getoption("--video")
     mobile = request.config.getoption("--mobile")
 
-    # Если передан executor, но без конкретного адреса, то по умолчанию ставим "127.0.0.1"
+    # Если переданн executor, ноо без конкретного адреса, то по умолчанию ставим "127.0.0.1"
     if executor is None:
         executor_url = None  # Локальный режим
     else:
@@ -108,68 +140,67 @@ def browser(request):
         if not executor:
             driver = webdriver.Edge(options=options)
 
-            caps = {
-                "browserName": browser_name,
-                "browserVersion": version,
-                "selenoid:options": {
-                    "enableVNC": vnc,
-                    "name": request.node.name,
-                    "screenResolution": "1280x2000",
-                    "enableVideo": video,
-                    "enableLog": logs,
-                    "timeZone": "Europe/Moscow",
-                    "env": ["LANG=ru_RU.UTF-8", "LANGUAGE=ru:en", "LC_ALL=ru_RU.UTF-8"],
-                },
-                "acceptInsecureCerts": True,
-            }
+    caps = {
+        "browserName": browser_name,
+        "browserVersion": version,
+        # "selenoid:options": {
+        #     "enableVNC": vnc,
+        #     "name": request.node.name,
+        #     "screenResolution": "1280x2000",
+        #     "enableVideo": video,
+        #     "enableLog": logs,
+        #     "timeZone": "Europe/Moscow",
+        #     "env": ["LANG=ru_RU.UTF-8", "LANGUAGE=ru:en", "LC_ALL=ru_RU.UTF-8"],
+        # },
+        # "acceptInsecureCerts": True,
+    }
 
-            if executor:
-                for k, v in caps.items():
-                    options.set_capability(k, v)
+    if executor:
+        for k, v in caps.items():
+            options.set_capability(k, v)
 
-                driver = webdriver.Remote(command_executor=executor_url, options=options)
+        driver = webdriver.Remote(command_executor=executor_url, options=options)
 
-            allure.attach(
-                name=driver.session_id,
-                body=json.dumps(driver.capabilities, indent=4, ensure_ascii=False),
-                attachment_type=allure.attachment_type.JSON,
-            )
+    allure.attach(
+        name=driver.session_id,
+        body=json.dumps(driver.capabilities, indent=4, ensure_ascii=False),
+        attachment_type=allure.attachment_type.JSON,
+    )
 
-            driver.log_level = log_level
-            driver.logger = logger
-            driver.test_name = request.node.name
+    driver.log_level = log_level
+    driver.logger = logger
+    driver.test_name = request.node.name
 
-            logger.info("Browser %s started" % browser)
+    logger.info("Browser %s started" % browser_name)
 
-            if not mobile:
-                driver.maximize_window()
+    if not mobile:
+        driver.maximize_window()
 
-            driver.base_url = base_url
+    driver.base_url = base_url
 
-            def fin():
-                driver.quit()
-                logger.info(
-                    "===> Test %s finished at %s" % (request.node.name, datetime.datetime.now())
-                )
+    def fin():
+        driver.quit()
+        logger.info(
+            "===> Test %s finished at %s" % (request.node.name, datetime.datetime.now())
+        )
 
-            yield driver
+    yield driver
 
-            if request.node.status == "failed":
-                allure.attach(
-                    name="failure_screenshot",
-                    body=driver.get_screenshot_as_png(),
-                    attachment_type=allure.attachment_type.PNG,
-                )
-                allure.attach(
-                    name="page_source",
-                    body=driver.page_source,
-                    attachment_type=allure.attachment_type.HTML,
-                )
+    if request.node.status == "failed":
+        allure.attach(
+            name="failure_screenshot",
+            body=driver.get_screenshot_as_png(),
+            attachment_type=allure.attachment_type.PNG,
+        )
+        allure.attach(
+            name="page_source",
+            body=driver.page_source,
+            attachment_type=allure.attachment_type.HTML,
+        )
 
-            request.addfinalizer(fin)
+    request.addfinalizer(fin)
 
-        @pytest.fixture
-        def create_new_user(browser):
-            registration_page = RegistrationPage(browser)
-            yield registration_page.create_new_user()
-
+@pytest.fixture
+def create_new_user(browser):
+    registration_page = RegistrationPage(browser)
+    yield registration_page.create_new_user()
