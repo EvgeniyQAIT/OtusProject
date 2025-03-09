@@ -37,7 +37,6 @@ def pytest_addoption(parser):
     parser.addoption("--logs", action="store_true", help="Enable logging of tests")
     parser.addoption("--video", action="store_true", help="Record video during tests")
     parser.addoption("--bv", help="Browser version")
-    parser.addoption("--no-sandbox")
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
@@ -47,41 +46,6 @@ def pytest_runtest_makereport(item, call):
         item.status = "failed"
     else:
         item.status = "passed"
-
-    if rep.when == "call" and rep.outcome == "failed":
-        try:
-            if "browser" in item.funcargs:
-                driver = item.funcargs["browser"]
-
-                screenshots_dir = os.path.join(os.path.dirname(__file__), "screenshots")
-                os.makedirs(screenshots_dir, exist_ok=True)
-
-                current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                date_dir = os.path.join(screenshots_dir, current_date)
-                os.makedirs(date_dir, exist_ok=True)
-
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                screenshot_path = os.path.join(
-                    date_dir, f"{item.name}_{timestamp}_{item.status}.png"
-                )
-
-                driver.save_screenshot(screenshot_path)
-
-                logger = driver.logger
-                logger.info(f"Скриншот сохранен: {screenshot_path}")
-            else:
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    f"Тест {item.name} не использует браузер, скриншот не создан."
-                )
-        except Exception as e:
-            driver = item.funcargs["browser"]
-            logger = driver.logger
-            logger.info(f"Не удалось создать скриншот: {e}")
-
-    # Создаем папку для результатов отчетов
-    allure_results_dir = os.path.join(os.path.dirname(__file__), "allure-results")
-    os.makedirs(allure_results_dir, exist_ok=True)
 
 @pytest.fixture()
 def browser(request):
@@ -96,12 +60,11 @@ def browser(request):
     video = request.config.getoption("--video")
     mobile = request.config.getoption("--mobile")
 
-    # Если переданн executor, ноо без конкретного адреса, то по умолчанию ставим "127.0.0.1"
+    # Убедитесь, что executor указан
     if executor is None:
-        executor_url = None  # Локальный режим
-    else:
-        # Если executor передан, формируем URL для удаленного сервера
-        executor_url = f"http://{executor}:4444/wd/hub"
+        raise ValueError("Executor address must be specified for remote execution.")
+
+    executor_url = f"http://{executor}:4444/wd/hub"
 
     log_dir = os.path.join(os.path.dirname(__file__), "logs")
 
@@ -123,43 +86,36 @@ def browser(request):
         options = ChromeOptions()
         if headless:
             options.add_argument("headless=new")
-        if not executor:
-            driver = webdriver.Chrome(options=options)
     elif browser_name in ["ff", "firefox"]:
         browser_name = "firefox"
         options = FFOptions()
         if headless:
             options.add_argument("--headless")
-        if not executor:
-            driver = webdriver.Firefox(options=options)
     elif browser_name in ["edge", "Edge", "MicrosoftEdge"]:
         browser_name = "MicrosoftEdge"
         options = EdgeOptions()
         if headless:
             options.add_argument("headless=new")
-        if not executor:
-            driver = webdriver.Edge(options=options)
 
     caps = {
         "browserName": browser_name,
         "browserVersion": version,
-        # "selenoid:options": {
-        #     "enableVNC": vnc,
-        #     "name": request.node.name,
-        #     "screenResolution": "1280x2000",
-        #     "enableVideo": video,
-        #     "enableLog": logs,
-        #     "timeZone": "Europe/Moscow",
-        #     "env": ["LANG=ru_RU.UTF-8", "LANGUAGE=ru:en", "LC_ALL=ru_RU.UTF-8"],
-        # },
-        # "acceptInsecureCerts": True,
+        "selenoid:options": {
+            "enableVNC": vnc,
+            "name": request.node.name,
+            "screenResolution": "1280x2000",
+            "enableVideo": video,
+            "enableLog": logs,
+            "timeZone": "Europe/Moscow",
+            "env": ["LANG=ru_RU.UTF-8", "LANGUAGE=ru:en", "LC_ALL=ru_RU.UTF-8"],
+        },
+        "acceptInsecureCerts": True,
     }
 
-    if executor:
-        for k, v in caps.items():
-            options.set_capability(k, v)
+    for k, v in caps.items():
+        options.set_capability(k, v)
 
-        driver = webdriver.Remote(command_executor=executor_url, options=options)
+    driver = webdriver.Remote(command_executor=executor_url, options=options)
 
     allure.attach(
         name=driver.session_id,
